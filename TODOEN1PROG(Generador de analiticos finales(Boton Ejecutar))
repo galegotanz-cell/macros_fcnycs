@@ -131,6 +131,33 @@ Sub ClonarYCopiar_SetFormat_BIndentTextCursorFull
         End If
     Next r
     
+    ' === FORMATEO ESPECIAL PARA LA ÚLTIMA FILA ===
+    ' Detectar la última fila insertada y activar ajuste automático
+    Dim lastInsertedRow As Long
+    lastInsertedRow = 16 + nonEmptyCount - 1  ' La última fila con datos insertados
+
+    ' Activar ajuste automático para todas las columnas de la última fila
+    For c = 0 To 5  ' Columnas A a F
+        Dim oLastRowCell As Object
+        oLastRowCell = oSheetClonada.getCellByPosition(c, lastInsertedRow)
+        oLastRowCell.IsTextWrapped = True
+        ' Mantener el resto del formato
+        oLastRowCell.CharFontName = "AvantGarde Bk BT"
+        oLastRowCell.CharHeight = 8  ' o el tamaño que hayas elegido
+        oLastRowCell.VertJustify = VERT_CENTER
+        If c = 1 Then  ' Columna B mantiene sangría y alineación izquierda
+            oLastRowCell.HoriJustify = HORIZ_LEFT
+            Dim oLastText As Object, oLastCursor As Object
+            oLastText = oLastRowCell.getText()
+            oLastCursor = oLastText.createTextCursor()
+            oLastCursor.gotoStart(False)
+            oLastCursor.gotoEnd(True)
+            oLastCursor.setPropertyValue("ParaLeftMargin", INDENT_VALUE)
+        Else
+            oLastRowCell.HoriJustify = HORIZ_CENTER
+        End If
+    Next c
+    
     ' === EXPORTACIÓN DE ARCHIVOS ===
     ' 1. Obtener de la hoja "Editor" los valores para construir el nombre de salida
     Dim oSheetEditor As Object
