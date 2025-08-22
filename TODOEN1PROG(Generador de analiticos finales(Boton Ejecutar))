@@ -1,0 +1,251 @@
+Sub ClonarYCopiar_SetFormat_BIndentTextCursorFull
+    Dim oDoc As Object, oSheets As Object
+    Dim oSheetDatos As Object, oSheetAnalitico As Object, oSheetClonada As Object
+    Dim sClonName As String
+    Dim oDataRange As Object, arrData As Variant
+    Dim tempList() As Variant, rowIndices() As Long
+    Dim nonEmptyCount As Long, r As Long, c As Long
+    Dim rowContent As Variant
+
+    ' --- Obtener el documento y las hojas ---
+    oDoc = ThisComponent
+    oSheets = oDoc.getSheets()
+    oSheetDatos = oSheets.getByName("Datos")
+    oSheetAnalitico = oSheets.getByName("SRF ANALITICO")
+    
+    ' --- Clonar la hoja "SRF ANALITICO" con nuevo nombre ---
+    sClonName = "SRF ANALITICO_CLON"
+    If oSheets.hasByName(sClonName) Then
+        MsgBox "La hoja '" & sClonName & "' ya existe."
+        Exit Sub
+    End If
+    oSheets.copyByName("SRF ANALITICO", sClonName, oSheets.getCount())
+    oSheetClonada = oSheets.getByName(sClonName)
+    
+    ' --- Convertir fórmulas a valores en la hoja clonada ---
+    Dim oCursor As Object, iRow As Long, iCol As Long
+    Dim oCell As Object, sDisplayedText As String
+    oCursor = oSheetClonada.createCursor()
+    oCursor.gotoStartOfUsedArea(False)
+    oCursor.gotoEndOfUsedArea(True)
+    For iRow = oCursor.getRangeAddress().StartRow To oCursor.getRangeAddress().EndRow
+        For iCol = oCursor.getRangeAddress().StartColumn To oCursor.getRangeAddress().EndColumn
+            oCell = oSheetClonada.getCellByPosition(iCol, iRow)
+            If Left(oCell.Formula, 1) = "=" Then
+                sDisplayedText = oCell.String
+                oCell.Formula = ""
+                oCell.String = sDisplayedText
+            End If
+        Next iCol
+    Next iRow
+
+    ' --- Leer el rango de "Datos": columnas A-F, filas 11 a 323 ---
+    ' (en UNO: columnas 0 a 5, filas 10 a 322)
+    oDataRange = oSheetDatos.getCellRangeByPosition(0, 10, 5, 322)
+    arrData = oDataRange.getDataArray()
+    
+    ' --- Filtrar filas: conservar únicamente aquellas con contenido ---
+    ReDim tempList(UBound(arrData))
+    ReDim rowIndices(UBound(arrData))
+    nonEmptyCount = 0
+    For r = LBound(arrData) To UBound(arrData)
+        rowContent = arrData(r)
+        Dim hasContent As Boolean
+        hasContent = False
+        For c = LBound(rowContent) To UBound(rowContent)
+            If Trim(CStr(rowContent(c))) <> "" Then
+                hasContent = True
+                Exit For
+            End If
+        Next c
+        If hasContent Then
+            tempList(nonEmptyCount) = rowContent
+            ' La fila 0 en arrData corresponde a la fila 10 en "Datos"
+            rowIndices(nonEmptyCount) = r + 10
+            nonEmptyCount = nonEmptyCount + 1
+        End If
+    Next r
+    
+    If nonEmptyCount = 0 Then
+        MsgBox "No se encontraron filas con datos en el rango especificado."
+        Exit Sub
+    End If
+    
+    ' --- Insertar filas en la hoja clonada a partir de la fila 21 ---
+    Dim oRows As Object
+    oRows = oSheetClonada.getRows()
+    oRows.insertByIndex(21, nonEmptyCount - 1)
+    
+    ' --- Constantes para alineación y sangría ---
+    Dim HORIZ_CENTER As Integer, HORIZ_LEFT As Integer, VERT_CENTER As Integer
+    HORIZ_CENTER = com.sun.star.table.CellHoriJustify.CENTER
+    HORIZ_LEFT = com.sun.star.table.CellHoriJustify.LEFT
+    VERT_CENTER = com.sun.star.table.CellVertJustify.CENTER
+    Const INDENT_VALUE As Long = 353  ' ~10pt en 1/100 mm
+    
+    Dim destRow As Long
+    Dim oOriginCell As Object, oDestCell As Object
+    Dim oTextCursor As Object
+    
+    ' --- Recorrer cada fila filtrada y copiar contenido y formato ---
+    For r = 0 To nonEmptyCount - 1
+        destRow = 20 + r  ' desde la fila 21 en adelante
+        For c = 0 To 5   ' Columnas A a F
+            oOriginCell = oSheetDatos.getCellByPosition(c, rowIndices(r))
+            oDestCell = oSheetClonada.getCellByPosition(c, destRow)
+            oDestCell.String = oOriginCell.String
+            oDestCell.CharFontName = "AvantGarde Bk BT"
+            oDestCell.CharHeight = 10
+            oDestCell.VertJustify = VERT_CENTER
+            If c = 1 Then  ' Columna B: alineación a la izquierda con sangría
+                oDestCell.HoriJustify = HORIZ_LEFT
+                oDestCell.IsTextWrapped = True
+                Dim oCellText As Object
+                oCellText = oDestCell.getText()
+                oTextCursor = oCellText.createTextCursor()
+                oTextCursor.gotoStart(False)
+                oTextCursor.gotoEnd(True)
+                oTextCursor.setPropertyValue("ParaLeftMargin", INDENT_VALUE)
+            Else
+                oDestCell.HoriJustify = HORIZ_CENTER
+                oDestCell.IsTextWrapped = False
+            End If
+        Next c
+        
+        ' --- Fusionar celdas si corresponde ---
+        Dim valA As String, valB As String
+        valA = oSheetClonada.getCellByPosition(0, destRow).String
+        valB = oSheetClonada.getCellByPosition(1, destRow).String
+        If valA = "" And UCase(Left(valB, 18)) = "ACTIVIDAD ELECTIVA" Then
+            oSheetClonada.getCellByPosition(0, destRow).String = valB
+            oSheetClonada.getCellByPosition(0, destRow).HoriJustify = HORIZ_LEFT
+            oSheetClonada.getCellByPosition(0, destRow).IsTextWrapped = True
+            Dim oMergeText As Object, oMergeCursor As Object, oMergeRange As Object
+            oMergeText = oSheetClonada.getCellByPosition(0, destRow).getText()
+            oMergeCursor = oMergeText.createTextCursor()
+            oMergeCursor.gotoStart(False)
+            oMergeCursor.gotoEnd(True)
+            oMergeCursor.setPropertyValue("ParaLeftMargin", INDENT_VALUE)
+            oMergeRange = oSheetClonada.getCellRangeByPosition(0, destRow, 1, destRow)
+            oMergeRange.merge(True)
+        End If
+    Next r
+    
+    ' === EXPORTACIÓN DE ARCHIVOS ===
+    ' 1. Obtener de la hoja "Editor" los valores para construir el nombre de salida
+    Dim oSheetEditor As Object
+    Dim sApellido As String, sNombre As String, sDNI As String
+    Dim sFileName As String
+    oSheetEditor = oSheets.getByName("Editor")
+    sApellido = oSheetEditor.getCellByPosition(17, 3).String  ' R4
+    sNombre = oSheetEditor.getCellByPosition(18, 3).String    ' S4
+    sDNI = oSheetEditor.getCellByPosition(17, 1).String       ' RS2
+    sFileName = UCase(sApellido & ", " & sNombre & " - " & sDNI)
+    
+    ' 2. Definir la ruta de la carpeta de exportación y crearla si no existe
+    Dim sFolderPath As String
+    sFolderPath = "file:///home/cristian/Documentos/ALUMNOS/Analitico p-titulo/Para enviar/" & sFileName
+    Dim oSimpleFileAccess As Object
+    oSimpleFileAccess = CreateUnoService("com.sun.star.ucb.SimpleFileAccess")
+    If Not oSimpleFileAccess.exists(sFolderPath) Then
+        oSimpleFileAccess.createFolder(sFolderPath)
+    End If
+    
+    ' 3. Definir las rutas completas para PDF y para el ODS a guardar
+    Dim sPDFURL As String, sODSURL As String
+    sPDFURL = sFolderPath & "/" & sFileName & ".pdf"
+    sODSURL = sFolderPath & "/" & sFileName & ".ods"
+    
+    ' 4. Copiar la hoja clonada al documento destino basado en el modelo
+    Dim dispatcher As Object
+    dispatcher = CreateUnoService("com.sun.star.frame.DispatchHelper")
+    
+    Dim oRange As Object
+    oRange = oSheetClonada.getCellRangeByPosition(0, 0, oSheetClonada.getColumns().getCount() - 1, oSheetClonada.getRows().getCount() - 1)
+    ThisComponent.getCurrentController().select(oRange)
+    dispatcher.executeDispatch(ThisComponent.getCurrentController().getFrame(), ".uno:Copy", "", 0, Array())
+    
+    ' Cargar el modelo ODS para pegar el contenido (ubicado en la carpeta indicada)
+    Dim sModeloPath As String
+    sModeloPath = "file:///home/cristian/Documentos/ALUMNOS/Analitico p-titulo/Analitico p-titulo 2025-MODELO.ods"
+    Dim oNewDoc As Object
+    oNewDoc = StarDesktop.loadComponentFromURL(sModeloPath, "_blank", 0, Array())
+    
+    Wait 500  ' Espera breve para asegurar que el portapapeles esté listo
+    
+    Dim oNewSheet As Object
+    oNewSheet = oNewDoc.getSheets().getByIndex(0)
+    oNewDoc.getCurrentController().select(oNewSheet.getCellByPosition(0, 0))
+    dispatcher.executeDispatch(oNewDoc.getCurrentController().getFrame(), ".uno:Paste", "", 0, Array())
+    
+    ' 5. Guardar el documento ODS utilizando el nombre formado y en la carpeta creada
+    Dim args(0) As Variant
+    args(0) = CreatePropertyValue("FilterName", "calc8")
+    oNewDoc.storeAsURL(sODSURL, args)
+    
+    ' 6. Exportar a PDF
+    Dim argsPDF(0) As Variant
+    argsPDF(0) = CreatePropertyValue("FilterName", "calc_pdf_Export")
+    oNewDoc.storeToURL(sPDFURL, argsPDF)
+    
+    oNewDoc.close(True)
+    
+    ' === BORRAR LA HOJA CLONADA DEL DOCUMENTO ORIGINAL ===
+    ThisComponent.getCurrentController().setActiveSheet(oSheetDatos)
+    oSheets.removeByName(sClonName)
+    
+    ' === ACTUALIZAR EL LISTADO ===
+    ' Se registra el nuevo nombre en la hoja "Listado" (columna A) a partir de A5
+    Dim oSheetListado As Object
+    Dim listRow As Long
+    oSheetListado = oSheets.getByName("Listado")
+    listRow = 4  ' A5 corresponde a índice de fila 4
+    Do While oSheetListado.getCellByPosition(0, listRow).String <> ""
+        listRow = listRow + 1
+    Loop
+    ' Escribir el nuevo nombre con prefijo "- "
+    oSheetListado.getCellByPosition(0, listRow).String = "- " & sFileName
+
+    ' Ahora, comparar el contenido de la celda A4 (título en Listado) con la celda AV3 de "Datos"
+    Dim sA4 As String, sAV3 As String
+    sA4 = oSheetListado.getCellByPosition(0, 3).String
+    ' Si A4 termina en ":", quitarlo para la comparación
+    If Len(sA4) > 0 Then
+        If Right(sA4, 1) = ":" Then
+            sA4 = Left(sA4, Len(sA4) - 1)
+        End If
+    End If
+    sAV3 = oSheetDatos.getCellByPosition(47, 2).String
+    
+    If sA4 = "" Then
+        ' Si A4 está vacía, copiar sAV3 seguido de ":" en A4
+        oSheetListado.getCellByPosition(0, 3).String = sAV3 & ":"
+    ElseIf sA4 <> sAV3 Then
+        ' Si no concuerda, insertar dos filas debajo del último registro y en la segunda pegar sAV3 con ":"
+        Dim oListadoRows As Object
+        oListadoRows = oSheetListado.getRows()
+        Dim i As Long
+        For i = 1 To 2
+            oListadoRows.insertByIndex(listRow + 1, CLng(1))
+        Next i
+        Dim oTargetCell As Object, oSourceCell As Object
+        oTargetCell = oSheetListado.getCellByPosition(0, listRow + 2)
+        oSourceCell = oSheetListado.getCellByPosition(0, 3)  ' para copiar formato
+        oTargetCell.String = sAV3 & ":"
+        oTargetCell.CharFontName = oSourceCell.CharFontName
+        oTargetCell.CharHeight = oSourceCell.CharHeight
+        oTargetCell.HoriJustify = oSourceCell.HoriJustify
+        oTargetCell.IsTextWrapped = oSourceCell.IsTextWrapped
+    End If
+
+    MsgBox "Proceso completado exitosamente."
+End Sub
+
+' Función auxiliar para crear un PropertyValue
+Function CreatePropertyValue(sName As String, vValue As Variant) As Object
+    Dim pv As Object
+    pv = CreateUnoStruct("com.sun.star.beans.PropertyValue")
+    pv.Name = sName
+    pv.Value = vValue
+    CreatePropertyValue = pv
+End Function
