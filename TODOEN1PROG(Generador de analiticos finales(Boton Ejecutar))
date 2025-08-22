@@ -74,7 +74,7 @@ Sub ClonarYCopiar_SetFormat_BIndentTextCursorFull
     ' --- Insertar filas en la hoja clonada a partir de la fila 21 ---
     Dim oRows As Object
     oRows = oSheetClonada.getRows()
-    oRows.insertByIndex(17, nonEmptyCount - 1)
+    oRows.insertByIndex(13, nonEmptyCount - 1)
     
     ' --- Constantes para alineación y sangría ---
     Dim HORIZ_CENTER As Integer, HORIZ_LEFT As Integer, VERT_CENTER As Integer
@@ -89,7 +89,7 @@ Sub ClonarYCopiar_SetFormat_BIndentTextCursorFull
     
     ' --- Recorrer cada fila filtrada y copiar contenido y formato ---
     For r = 0 To nonEmptyCount - 1
-        destRow = 16 + r  ' desde la fila 17 en adelante
+        destRow = 12 + r  ' desde la fila 13 en adelante
         For c = 0 To 5   ' Columnas A a F
             oOriginCell = oSheetDatos.getCellByPosition(c, rowIndices(r))
             oDestCell = oSheetClonada.getCellByPosition(c, destRow)
@@ -134,7 +134,7 @@ Sub ClonarYCopiar_SetFormat_BIndentTextCursorFull
     ' === FORMATEO ESPECIAL PARA LA ÚLTIMA FILA ===
     ' Detectar la última fila insertada y activar ajuste automático
     Dim lastInsertedRow As Long
-    lastInsertedRow = 16 + nonEmptyCount - 1  ' La última fila con datos insertados
+    lastInsertedRow = 12 + nonEmptyCount - 1  ' La última fila con datos insertados
 
     ' Activar ajuste automático para todas las columnas de la última fila
     For c = 0 To 5  ' Columnas A a F
