@@ -40,7 +40,6 @@ Sub ClonarYCopiar_SetFormat_BIndentTextCursorFull
     Next iRow
 
     ' --- Leer el rango de "Datos": columnas A-F, filas 11 a 323 ---
-    ' (en UNO: columnas 0 a 5, filas 10 a 322)
     oDataRange = oSheetDatos.getCellRangeByPosition(0, 10, 5, 322)
     arrData = oDataRange.getDataArray()
     
@@ -60,7 +59,6 @@ Sub ClonarYCopiar_SetFormat_BIndentTextCursorFull
         Next c
         If hasContent Then
             tempList(nonEmptyCount) = rowContent
-            ' La fila 0 en arrData corresponde a la fila 10 en "Datos"
             rowIndices(nonEmptyCount) = r + 10
             nonEmptyCount = nonEmptyCount + 1
         End If
@@ -71,66 +69,145 @@ Sub ClonarYCopiar_SetFormat_BIndentTextCursorFull
         Exit Sub
     End If
     
-    ' --- Insertar filas en la hoja clonada a partir de la fila 21 ---
+    ' *** NUEVA LÓGICA PARA MÚLTIPLES PÁGINAS ***
+    ' --- Obtener datos para encabezados de páginas adicionales ---
+    Dim sApellidoHeader As String, sNombreHeader As String, sDNIHeader As String
+    sApellidoHeader = oSheetDatos.getCellByPosition(17, 3).String  ' R4
+    sNombreHeader = oSheetDatos.getCellByPosition(18, 3).String    ' S4
+    sDNIHeader = oSheetDatos.getCellByPosition(17, 1).String       ' R2
+    
+    ' --- Calcular páginas necesarias (40 filas de datos por página aproximadamente) ---
+    Const ROWS_PER_PAGE As Long = 40
+    Dim totalPages As Long, currentPage As Long
+    totalPages = Int((nonEmptyCount - 1) / ROWS_PER_PAGE) + 1
+    
+    ' --- Calcular filas adicionales necesarias para logos y encabezados ---
+    Dim additionalRows As Long
+    additionalRows = (totalPages - 1) * 10  ' 9 filas de logo + 1 fila de encabezado por página adicional
+    
+    ' --- Insertar todas las filas necesarias ---
     Dim oRows As Object
     oRows = oSheetClonada.getRows()
-    oRows.insertByIndex(13, nonEmptyCount - 1)
+    oRows.insertByIndex(13, nonEmptyCount + additionalRows - 1)
     
     ' --- Constantes para alineación y sangría ---
     Dim HORIZ_CENTER As Integer, HORIZ_LEFT As Integer, VERT_CENTER As Integer
     HORIZ_CENTER = com.sun.star.table.CellHoriJustify.CENTER
     HORIZ_LEFT = com.sun.star.table.CellHoriJustify.LEFT
     VERT_CENTER = com.sun.star.table.CellVertJustify.CENTER
-    Const INDENT_VALUE As Long = 353  ' ~10pt en 1/100 mm
+    Const INDENT_VALUE As Long = 353
     
-    Dim destRow As Long
+    Dim destRow As Long, dataIndex As Long
     Dim oOriginCell As Object, oDestCell As Object
     Dim oTextCursor As Object
     
-    ' --- Recorrer cada fila filtrada y copiar contenido y formato ---
-    For r = 0 To nonEmptyCount - 1
-        destRow = 12 + r  ' desde la fila 13 en adelante
-        For c = 0 To 5   ' Columnas A a F
-            oOriginCell = oSheetDatos.getCellByPosition(c, rowIndices(r))
-            oDestCell = oSheetClonada.getCellByPosition(c, destRow)
-            oDestCell.String = oOriginCell.String
-            oDestCell.CharFontName = "AvantGarde Bk BT"
-            oDestCell.CharHeight = 15
-            oDestCell.VertJustify = VERT_CENTER
-            If c = 1 Then  ' Columna B: alineación a la izquierda con sangría
-                oDestCell.HoriJustify = HORIZ_LEFT
-                oDestCell.IsTextWrapped = True
-                Dim oCellText As Object
-                oCellText = oDestCell.getText()
-                oTextCursor = oCellText.createTextCursor()
-                oTextCursor.gotoStart(False)
-                oTextCursor.gotoEnd(True)
-                oTextCursor.setPropertyValue("ParaLeftMargin", INDENT_VALUE)
-            Else
-                oDestCell.HoriJustify = HORIZ_CENTER
-                oDestCell.IsTextWrapped = False
-            End If
-        Next c
-        
-        ' --- Fusionar celdas si corresponde ---
-        Dim valA As String, valB As String
-        valA = oSheetClonada.getCellByPosition(0, destRow).String
-        valB = oSheetClonada.getCellByPosition(1, destRow).String
-        If valA = "" And UCase(Left(valB, 18)) = "ACTIVIDAD ELECTIVA" Then
-            oSheetClonada.getCellByPosition(0, destRow).String = valB
-            oSheetClonada.getCellByPosition(0, destRow).HoriJustify = HORIZ_LEFT
-            oSheetClonada.getCellByPosition(0, destRow).IsTextWrapped = True
-            Dim oMergeText As Object, oMergeCursor As Object, oMergeRange As Object
-            oMergeText = oSheetClonada.getCellByPosition(0, destRow).getText()
-            oMergeCursor = oMergeText.createTextCursor()
-            oMergeCursor.gotoStart(False)
-            oMergeCursor.gotoEnd(True)
-            oMergeCursor.setPropertyValue("ParaLeftMargin", INDENT_VALUE)
-            oMergeRange = oSheetClonada.getCellRangeByPosition(0, destRow, 1, destRow)
-            oMergeRange.merge(True)
-        End If
-    Next r
+    ' --- Variables para control de páginas ---
+    currentPage = 1
+    dataIndex = 0
+    destRow = 12  ' Empezar en fila 13
     
+    ' --- Procesar datos página por página ---
+    Do While dataIndex < nonEmptyCount
+        ' Si no es la primera página, insertar logos y encabezado
+        If currentPage > 1 Then
+            ' Copiar logos (filas 0-8, columnas A-F) desde la hoja original
+            For iRow = 0 To 8
+                For iCol = 0 To 5
+                    oOriginCell = oSheetAnalitico.getCellByPosition(iCol, iRow)
+                    oDestCell = oSheetClonada.getCellByPosition(iCol, destRow)
+                    
+                    ' Copiar contenido y formato
+                    oDestCell.String = oOriginCell.String
+                    oDestCell.CharFontName = oOriginCell.CharFontName
+                    oDestCell.CharHeight = oOriginCell.CharHeight
+                    oDestCell.HoriJustify = oOriginCell.HoriJustify
+                    oDestCell.VertJustify = oOriginCell.VertJustify
+                    oDestCell.IsTextWrapped = oOriginCell.IsTextWrapped
+                    
+                    ' Copiar color de fondo si existe
+                    If oOriginCell.CellBackColor <> -1 Then
+                        oDestCell.CellBackColor = oOriginCell.CellBackColor
+                    End If
+                Next iCol
+                destRow = destRow + 1
+            Next iRow
+            
+            ' Agregar encabezado de página
+            Dim sPageHeader As String
+            sPageHeader = "HOJA N°" & currentPage & " - Certificado analítico " & sApellidoHeader & ", " & sNombreHeader & " (DNI N°" & sDNIHeader & ")"
+            
+            ' Fusionar celdas A-F para el encabezado
+            Dim oHeaderRange As Object
+            oHeaderRange = oSheetClonada.getCellRangeByPosition(0, destRow, 5, destRow)
+            oHeaderRange.merge(True)
+            
+            ' Configurar el encabezado
+            oDestCell = oSheetClonada.getCellByPosition(0, destRow)
+            oDestCell.String = sPageHeader
+            oDestCell.CharFontName = "AvantGarde Bk BT"
+            oDestCell.CharHeight = 12
+            oDestCell.CharWeight = com.sun.star.awt.FontWeight.BOLD
+            oDestCell.HoriJustify = HORIZ_CENTER
+            oDestCell.VertJustify = VERT_CENTER
+            oDestCell.IsTextWrapped = True
+            
+            destRow = destRow + 1
+        End If
+        
+        ' Insertar datos de la página actual (máximo ROWS_PER_PAGE filas)
+        Dim rowsInCurrentPage As Long
+        rowsInCurrentPage = 0
+        
+        Do While dataIndex < nonEmptyCount And rowsInCurrentPage < ROWS_PER_PAGE
+            For c = 0 To 5   ' Columnas A a F
+                oOriginCell = oSheetDatos.getCellByPosition(c, rowIndices(dataIndex))
+                oDestCell = oSheetClonada.getCellByPosition(c, destRow)
+                oDestCell.String = oOriginCell.String
+                oDestCell.CharFontName = "AvantGarde Bk BT"
+                oDestCell.CharHeight = 15
+                oDestCell.VertJustify = VERT_CENTER
+                If c = 1 Then  ' Columna B: alineación a la izquierda con sangría
+                    oDestCell.HoriJustify = HORIZ_LEFT
+                    oDestCell.IsTextWrapped = True
+                    Dim oCellText As Object
+                    oCellText = oDestCell.getText()
+                    oTextCursor = oCellText.createTextCursor()
+                    oTextCursor.gotoStart(False)
+                    oTextCursor.gotoEnd(True)
+                    oTextCursor.setPropertyValue("ParaLeftMargin", INDENT_VALUE)
+                Else
+                    oDestCell.HoriJustify = HORIZ_CENTER
+                    oDestCell.IsTextWrapped = False
+                End If
+            Next c
+            
+            ' --- Fusionar celdas si corresponde ---
+            Dim valA As String, valB As String
+            valA = oSheetClonada.getCellByPosition(0, destRow).String
+            valB = oSheetClonada.getCellByPosition(1, destRow).String
+            If valA = "" And UCase(Left(valB, 18)) = "ACTIVIDAD ELECTIVA" Then
+                oSheetClonada.getCellByPosition(0, destRow).String = valB
+                oSheetClonada.getCellByPosition(0, destRow).HoriJustify = HORIZ_LEFT
+                oSheetClonada.getCellByPosition(0, destRow).IsTextWrapped = True
+                Dim oMergeText As Object, oMergeCursor As Object, oMergeRange As Object
+                oMergeText = oSheetClonada.getCellByPosition(0, destRow).getText()
+                oMergeCursor = oMergeText.createTextCursor()
+                oMergeCursor.gotoStart(False)
+                oMergeCursor.gotoEnd(True)
+                oMergeCursor.setPropertyValue("ParaLeftMargin", INDENT_VALUE)
+                oMergeRange = oSheetClonada.getCellRangeByPosition(0, destRow, 1, destRow)
+                oMergeRange.merge(True)
+            End If
+            
+            destRow = destRow + 1
+            dataIndex = dataIndex + 1
+            rowsInCurrentPage = rowsInCurrentPage + 1
+        Loop
+        
+        currentPage = currentPage + 1
+    Loop
+    
+    ' === RESTO DEL CÓDIGO ORIGINAL (sin cambios) ===
     ' === EXPORTACIÓN DE ARCHIVOS ===
     ' 1. Obtener de la hoja "Editor" los valores para construir el nombre de salida
     Dim oSheetEditor As Object
@@ -238,7 +315,7 @@ Sub ClonarYCopiar_SetFormat_BIndentTextCursorFull
         oTargetCell.IsTextWrapped = oSourceCell.IsTextWrapped
     End If
 
-    MsgBox "Proceso completado exitosamente."
+    MsgBox "Proceso completado exitosamente. Se procesaron " & totalPages & " páginas."
 End Sub
 
 ' Función auxiliar para crear un PropertyValue
