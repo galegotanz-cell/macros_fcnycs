@@ -95,7 +95,7 @@ Sub ClonarYCopiar_SetFormat_BIndentTextCursorFull
             oDestCell = oSheetClonada.getCellByPosition(c, destRow)
             oDestCell.String = oOriginCell.String
             oDestCell.CharFontName = "AvantGarde Bk BT"
-            oDestCell.CharHeight = 10
+            oDestCell.CharHeight = 15
             oDestCell.VertJustify = VERT_CENTER
             If c = 1 Then  ' Columna B: alineación a la izquierda con sangría
                 oDestCell.HoriJustify = HORIZ_LEFT
