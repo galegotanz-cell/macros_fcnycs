@@ -165,59 +165,66 @@ sApellidoHoja = oSheetDatos.getCellByPosition(17, 3).String  ' R4 (combinada con
 sNombreHoja = oSheetDatos.getCellByPosition(18, 3).String    ' S4 (combinada con S5)
 sDNIHoja = oSheetDatos.getCellByPosition(17, 1).String       ' RS2
 
-' Estimar filas por página (aproximadamente 35-40 filas por página A4)
+' Estimar filas por página (aproximadamente 30-35 filas por página A4, ajustar según pruebas)
 Dim rowsPerPage As Long
-rowsPerPage = 35  ' Ajusta este valor según tus pruebas
+rowsPerPage = 30  ' Ajusta este valor según tus pruebas
 
 ' Calcular fila final del contenido
 Dim finalRow As Long
 finalRow = 12 + nonEmptyCount - 1
 
-' Calcular número total de páginas estimadas
-Dim totalPages As Long
-totalPages = Int((finalRow - 12) / rowsPerPage) + 1
+' Estimar dónde ocurrirán los saltos de página naturales
+Dim pageBreakRows() As Long
+Dim pageNum As Long, estimatedBreakRow As Long
+Dim breakCount As Long
+breakCount = 0
 
-If totalPages > 1 Then
-    ' Insertar encabezados para páginas adicionales
-    Dim pageNum As Long
-    Dim headerRow As Long
-    
-    For pageNum = 2 To totalPages
-        ' Calcular dónde insertar el encabezado (primera fila de cada página)
-        headerRow = 12 + ((pageNum - 1) * rowsPerPage)
+' Determinar puntos de salto de página aproximados
+For pageNum = 2 To 10  ' Máximo 10 páginas para evitar bucle infinito
+    estimatedBreakRow = 12 + ((pageNum - 1) * rowsPerPage)
+    If estimatedBreakRow <= finalRow Then
+        ReDim Preserve pageBreakRows(breakCount)
+        pageBreakRows(breakCount) = estimatedBreakRow
+        breakCount = breakCount + 1
+    Else
+        Exit For
+    End If
+Next pageNum
+
+' Insertar encabezados y saltos de página (de atrás hacia adelante para no alterar índices)
+If breakCount > 0 Then
+    Dim i As Long
+    For i = breakCount - 1 To 0 Step -1
+        Dim insertRow As Long
+        insertRow = pageBreakRows(i) + i  ' Compensar filas ya insertadas
         
-        ' Insertar una fila para el encabezado si es necesario
-        If headerRow <= finalRow Then
-            oRows.insertByIndex(headerRow, 1)
-            
-            ' Crear el texto del encabezado
-            Dim sHeaderText As String
-            sHeaderText = "HOJA N°" & pageNum & " - Certificado analítico " & sApellidoHoja & ", " & sNombreHoja & " (DNI N°" & sDNIHoja & ")"
-            
-            ' Insertar el encabezado en la celda A
-            Dim oHeaderCell As Object
-            oHeaderCell = oSheetClonada.getCellByPosition(0, headerRow)
-            oHeaderCell.String = sHeaderText
-            
-            ' Formatear el encabezado
-            oHeaderCell.CharFontName = "AvantGarde Bk BT"
-            oHeaderCell.CharHeight = 8  ' o el tamaño que uses
-            oHeaderCell.HoriJustify = HORIZ_CENTER
-            oHeaderCell.VertJustify = VERT_CENTER
-            oHeaderCell.IsTextWrapped = True
-            
-            ' Combinar celdas A-F para el encabezado
-            Dim oHeaderRange As Object
-            oHeaderRange = oSheetClonada.getCellRangeByPosition(0, headerRow, 5, headerRow)
-            oHeaderRange.merge(True)
-            
-            ' Insertar salto de página antes del encabezado
-            oSheetClonada.getCellByPosition(0, headerRow).setPropertyValue("BreakType", com.sun.star.style.BreakType.PAGE_BEFORE)
-            
-            ' Actualizar contadores para las siguientes páginas
-            finalRow = finalRow + 1
-        End If
-    Next pageNum
+        ' Insertar una fila para el encabezado
+        oRows.insertByIndex(insertRow, 1)
+        
+        ' Crear el texto del encabezado
+        Dim sHeaderText As String
+        sHeaderText = "HOJA N°" & (i + 2) & " - Certificado analítico " & sApellidoHoja & ", " & sNombreHoja & " (DNI N°" & sDNIHoja & ")"
+        
+        ' Insertar el encabezado en la celda A de la fila insertada
+        Dim oHeaderCell As Object
+        oHeaderCell = oSheetClonada.getCellByPosition(0, insertRow)
+        oHeaderCell.String = sHeaderText
+        
+        ' Formatear el encabezado
+        oHeaderCell.CharFontName = "AvantGarde Bk BT"
+        oHeaderCell.CharHeight = 8  ' usa el tamaño que tengas configurado
+        oHeaderCell.HoriJustify = HORIZ_CENTER
+        oHeaderCell.VertJustify = VERT_CENTER
+        oHeaderCell.IsTextWrapped = True
+        
+        ' Combinar celdas A-F para el encabezado
+        Dim oHeaderRange As Object
+        oHeaderRange = oSheetClonada.getCellRangeByPosition(0, insertRow, 5, insertRow)
+        oHeaderRange.merge(True)
+        
+        ' Forzar salto de página antes de esta fila
+        oSheetClonada.getCellByPosition(0, insertRow).setPropertyValue("BreakType", com.sun.star.style.BreakType.PAGE_BEFORE)
+    Next i
 End If
     
     ' === EXPORTACIÓN DE ARCHIVOS ===
