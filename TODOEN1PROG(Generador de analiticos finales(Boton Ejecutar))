@@ -143,7 +143,7 @@ Sub ClonarYCopiar_SetFormat_BIndentTextCursorFull
         oLastRowCell.IsTextWrapped = True
         ' Mantener el resto del formato
         oLastRowCell.CharFontName = "AvantGarde Bk BT"
-        oLastRowCell.CharHeight = 8  ' o el tamaño que hayas elegido
+        oLastRowCell.CharHeight = 15  ' o el tamaño que hayas elegido
         oLastRowCell.VertJustify = VERT_CENTER
         If c = 1 Then  ' Columna B mantiene sangría y alineación izquierda
             oLastRowCell.HoriJustify = HORIZ_LEFT
